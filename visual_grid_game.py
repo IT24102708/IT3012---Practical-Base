@@ -49,21 +49,39 @@ class VisualGridHuntGame:
         self.score = 0
         self.steps = 0
         self.collision = False
+        self.facing = 'Up'
 
     def get_percept(self) -> dict:
+       
+        # Determine the cell directly ahead based on current facing direction
+        ahead_x, ahead_y = self.agent_pos
+        if self.facing == 'Up':
+            ahead_y += 1
+        elif self.facing == 'Down':
+            ahead_y -= 1
+        elif self.facing == 'Left':
+            ahead_x -= 1
+        elif self.facing == 'Right':
+            ahead_x += 1
+
+        # Check if the calculated 'ahead' cell is a wall or out of bounds
+        wall_ahead = (ahead_x, ahead_y) in self.walls or \
+                     ahead_x < 0 or ahead_x >= self.width or \
+                     ahead_y < 0 or ahead_y >= self.height
+
+        food_here = tuple(self.agent_pos) in self.food_positions
+
         return {
-            'agent_pos': list(self.agent_pos),
-            'opponent_positions': [list(op) for op in self.opponents],
-            'smells_food': tuple(self.agent_pos) in self.food_positions,
-            'hit_wall': tuple(self.agent_pos) in self.walls,
-            'collision': self.collision,
-            'score': self.score,
-            'remaining_food': len(self.food_positions),
-            'smells_toxin': tuple(self.agent_pos) in self.toxic_traps
+            'wall_ahead': wall_ahead,
+            'food_here': food_here
         }
 
     def execute_action(self, action: str):
         self.steps += 1
+
+        if action in ['Up', 'Down', 'Left', 'Right']:
+            self.facing = action
+        
         new_pos = list(self.agent_pos)
 
         if action == 'Up':
