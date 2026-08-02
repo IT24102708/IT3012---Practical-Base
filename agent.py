@@ -18,14 +18,17 @@ class SimpleReflexAgent:
     
     
     def sense_and_act(self, percept: dict) -> str:
-        # IF food_here THEN stay (to consume); IF wall_ahead THEN turn_left; ELSE move_forward
+        # IF food_here THEN stay (to consume)
+        # IF wall_ahead THEN turn_left
+        # ELSE move_forward
         if percept.get('food_here'):
             return 'Stay'
         elif percept.get('wall_ahead'):
-            return 'Left' # Blindly turns left when facing a wall
+            # Blindly turns left when facing a wall
+            return 'Left' 
         else:
-            return 'Up'   # Blindly attempts to move forward
-
+            # Blindly attempts to move forward
+            return 'Up'   
 
 
 class ModelBasedAgent:
@@ -51,9 +54,11 @@ class ModelBasedAgent:
                 available_actions.remove(self.last_action)
             action = random.choice(available_actions)
         elif percept.get('wall_ahead'):
-            action = 'Left' # Default reflex reaction
+             # Default reflex reaction
+            action = 'Left'
         else:
-            action = 'Up'   # Default forward movement
+            # Default forward movement
+            action = 'Up'   
         
         # 3. Record history for the next iteration
         self.previous_percept = percept
