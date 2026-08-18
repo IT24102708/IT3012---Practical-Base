@@ -1,5 +1,7 @@
 # agent.py
 import random
+from collections import deque
+import heapq
 
 class GreedyGridAgent:
     """A simple agent that tries to move around systematically to clear the grid."""
@@ -65,3 +67,144 @@ class ModelBasedAgent:
         self.last_action = action
         
         return action
+
+
+class SearchAgent: 
+
+    def __init__(self):
+        # Stores the sequence of actions to reach the goal
+        self.plan = []
+        # Configuration string to easily swap algorithms for the observation task
+        self.active_algo = 'BFS'
+
+    def get_successors(self, state, walls, grid_size):
+        
+        x, y = state
+        width, height = grid_size
+        successors = []
+        
+        # Directions mapping based on your environment's coordinate system
+        moves = {
+            'Up': (0, 1),
+            'Down': (0, -1),
+            'Left': (-1, 0),
+            'Right': (1, 0)
+        }
+        
+        for action, (dx, dy) in moves.items():
+            nx, ny = x + dx, y + dy
+            # Check boundaries
+            if 0 <= nx < width and 0 <= ny < height:
+                # Check walls
+                if (nx, ny) not in walls:
+                    successors.append((action, (nx, ny)))
+                    
+        return successors
+
+
+    def bfs_search(self, start_pos, goal_pos, walls, grid_size):
+        # FIFO Queue stores tuples of (current_state, path_taken)
+        frontier = deque([(start_pos, [])])
+        visited = set([start_pos])
+
+        while frontier:
+            current_state, path = frontier.popleft()
+
+            if current_state == goal_pos:
+                return path
+
+            for action, next_state in self.get_successors(current_state, walls, grid_size):
+                if next_state not in visited:
+                    visited.add(next_state)
+                    frontier.append((next_state, path + [action]))
+                    
+        return []  # Return empty if goal is unreachable
+
+
+    def dfs_search(self, start_pos, goal_pos, walls, grid_size):
+        # LIFO Stack stores tuples of (current_state, path_taken)
+        frontier = [(start_pos, [])]
+        visited = set() 
+
+        while frontier:
+            current_state, path = frontier.pop()
+            
+            if current_state == goal_pos:
+                return path
+                
+            # For DFS, it's safer to mark visited when popping from the stack
+            if current_state not in visited:
+                visited.add(current_state)
+                
+                for action, next_state in self.get_successors(current_state, walls, grid_size):
+                    if next_state not in visited:
+                        frontier.append((next_state, path + [action]))
+                        
+        return []
+
+    def ucs_search(self, start_pos, goal_pos, walls, grid_size):
+        # Priority Queue stores tuples of (cost, counter, current_state, path_taken)
+        frontier = []
+        counter = 0
+        heapq.heappush(frontier, (0, counter, start_pos, []))
+        visited = set()
+
+        while frontier:
+            cost, _, current_state, path = heapq.heappop(frontier)
+
+            if current_state == goal_pos:
+                return path
+                
+            if current_state not in visited:
+                visited.add(current_state)
+                
+                for action, next_state in self.get_successors(current_state, walls, grid_size):
+                    if next_state not in visited:
+                        counter += 1
+                        heapq.heappush(frontier, (cost + 1, counter, next_state, path + [action]))
+                        
+        return []
+
+
+    def sense_and_act(self, percept: dict) -> str:
+        # Step 1: Check if the current plan is empty
+        if not self.plan:
+            
+            all_food = percept.get('all_food', [])
+            
+            # Safety check: If there is no food left, do nothing
+            if not all_food:
+                return 'Stay'
+                
+            # Get current position and convert to tuple for coordinate math
+            start_pos = tuple(percept['agent_pos'])
+            
+            # Step 2: Find the closest food pellet using Manhattan distance
+            closest_food = min(
+                all_food, 
+                key=lambda f: abs(f[0] - start_pos[0]) + abs(f[1] - start_pos[1])
+            )
+            
+            # Extract environment data for the search
+            walls = set(percept['walls']) # Convert to set for faster lookups
+            grid_size = percept['grid_size']
+            
+            # Step 3: Execute the search method matching self.active_algo
+            if self.active_algo == 'BFS':
+                self.plan = self.bfs_search(start_pos, closest_food, walls, grid_size)
+            elif self.active_algo == 'DFS':
+                self.plan = self.dfs_search(start_pos, closest_food, walls, grid_size)
+            elif self.active_algo == 'UCS':
+                self.plan = self.ucs_search(start_pos, closest_food, walls, grid_size)
+                
+        # Step 4: Execute the plan step-by-step
+        if self.plan:
+            # Return the first action and remove it from the list
+            return self.plan.pop(0)
+        else:
+            # Fallback if the search failed to find a path (e.g., food is fully blocked off)
+            return 'Stay'
+
+    
+
+
