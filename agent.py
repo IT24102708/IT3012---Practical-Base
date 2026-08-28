@@ -2,6 +2,7 @@
 import random
 from collections import deque
 import heapq
+import math
 
 class GreedyGridAgent:
     """A simple agent that tries to move around systematically to clear the grid."""
@@ -76,6 +77,9 @@ class SearchAgent:
         self.plan = []
         # Configuration string to easily swap algorithms for the observation task
         self.active_algo = 'BFS'
+
+        print(f"Manhattan Test: {self.manhattan_distance((0,0), (3,4))}") 
+        print(f"Euclidean Test: {self.euclidean_distance((0,0), (3,4))}")
 
     def get_successors(self, state, walls, grid_size):
         
@@ -170,6 +174,7 @@ class SearchAgent:
         # Step 1: Check if the current plan is empty
         if not self.plan:
             
+            # Note: Your visual environment provides 'all_food' instead of 'remaining_food'
             all_food = percept.get('all_food', [])
             
             # Safety check: If there is no food left, do nothing
@@ -179,32 +184,93 @@ class SearchAgent:
             # Get current position and convert to tuple for coordinate math
             start_pos = tuple(percept['agent_pos'])
             
-            # Step 2: Find the closest food pellet using Manhattan distance
+            # Using your new manhattan_distance method for cleaner code
             closest_food = min(
                 all_food, 
-                key=lambda f: abs(f[0] - start_pos[0]) + abs(f[1] - start_pos[1])
+                key=lambda f: self.manhattan_distance(start_pos, f)
             )
             
             # Extract environment data for the search
             walls = set(percept['walls']) # Convert to set for faster lookups
             grid_size = percept['grid_size']
             
-            # Step 3: Execute the search method matching self.active_algo
+            # Execute the search method matching self.active_algo
             if self.active_algo == 'BFS':
                 self.plan = self.bfs_search(start_pos, closest_food, walls, grid_size)
             elif self.active_algo == 'DFS':
                 self.plan = self.dfs_search(start_pos, closest_food, walls, grid_size)
             elif self.active_algo == 'UCS':
                 self.plan = self.ucs_search(start_pos, closest_food, walls, grid_size)
+            # Task 2: Add the AStar block to handle the new algorithm
+            elif self.active_algo == 'AStar':
+                self.plan = self.astar_search(start_pos, closest_food, walls, grid_size, 'manhattan')
                 
-        # Step 4: Execute the plan step-by-step
+        # Execute the plan step-by-step
         if self.plan:
             # Return the first action and remove it from the list
             return self.plan.pop(0)
         else:
-            # Fallback if the search failed to find a path (e.g., food is fully blocked off)
+            # Fallback if the search failed to find a path 
             return 'Stay'
 
-    
+
+    def manhattan_distance(self, pos, goal):
+        # Calculates h(n) = |x_1 - x_2| + |y_1 - y_2|
+        return abs(pos[0] - goal[0]) + abs(pos[1] - goal[1])
 
 
+    def euclidean_distance(self, pos, goal):
+        # Calculates h(n) = \sqrt{(x_1-x_2)^2+(y_1-y_2)^2}
+        return math.sqrt((pos[0] - goal[0])**2 + (pos[1] - goal[1])**2)
+
+
+    def astar_search(self, start_pos, goal_pos, walls, grid_size, heuristic_type='manhattan'):
+        # Task 2: Initialize priority queue and reached_states set
+        priority_queue = []
+        reached_states = set()
+        
+        # Task 3: Calculate initial costs and push the starting node
+        g_cost = 0
+        if heuristic_type == 'manhattan':
+            h_cost = self.manhattan_distance(start_pos, goal_pos)
+        else:
+            h_cost = self.euclidean_distance(start_pos, goal_pos)
+            
+        f_cost = g_cost + h_cost
+        
+        # Format: (f_cost, g_cost, current_pos, path_taken)
+        heapq.heappush(priority_queue, (f_cost, g_cost, start_pos, []))
+        
+        # Task 4: Standard while loop to process the queue
+        while priority_queue:
+            current_f, current_g, current_pos, path_taken = heapq.heappop(priority_queue)
+            
+            # Goal Check
+            if current_pos == goal_pos:
+                return path_taken
+                
+            # Skip if we have already expanded this state with a cheaper path
+            if current_pos in reached_states:
+                continue
+            reached_states.add(current_pos)
+            
+            # Task 5: Node expansion using your existing get_successors method
+            for action, next_state in self.get_successors(current_pos, walls, grid_size):
+                if next_state not in reached_states:
+                    # Calculate new g(n)
+                    new_g = current_g + 1
+                    
+                    # Calculate new h(n) based on the selected heuristic
+                    if heuristic_type == 'manhattan':
+                        new_h = self.manhattan_distance(next_state, goal_pos)
+                    else:
+                        new_h = self.euclidean_distance(next_state, goal_pos)
+                        
+                    # Calculate new f(n)
+                    new_f = new_g + new_h
+                    
+                    # Push the new state to the priority queue
+                    heapq.heappush(priority_queue, (new_f, new_g, next_state, path_taken + [action]))
+                    
+        # Return an empty list if no path is found
+        return []
