@@ -3,6 +3,7 @@ import random
 from collections import deque
 import heapq
 import math
+from logic_engine import KnowledgeBase
 
 class GreedyGridAgent:
     """A simple agent that tries to move around systematically to clear the grid."""
@@ -274,3 +275,92 @@ class SearchAgent:
                     
         # Return an empty list if no path is found
         return []
+
+
+class Node:
+    def __init__(self, position, parent=None):
+        self.position = position
+        self.parent = parent
+        self.g = 0  # Cost from start node
+        self.h = 0  # Heuristic estimated cost to goal
+        self.f = 0  # Total cost (g + h)
+
+    def __lt__(self, other):
+        return self.f < other.f
+
+class Agent:
+    def __init__(self):
+        self.kb = KnowledgeBase()
+        
+        # Define Safety Constraints
+        self.kb.tell_rule(['TargetVisible', 'HasDust'], 'SafeToEngage')
+        self.kb.tell_rule(['SafeToEngage', 'BloodseekerMissing'], 'Retreat')
+
+    def calculate_heuristic(self, current, goal):
+        return abs(current[0] - goal[0]) + abs(current[1] - goal[1])
+
+    def get_neighbors(self, current_node, grid_size):
+        x, y = current_node.position
+        neighbors = []
+        directions = [(0, 1), (1, 0), (0, -1), (-1, 0)]
+        
+        for dx, dy in directions:
+            nx, ny = x + dx, y + dy
+            if 0 <= nx < grid_size[0] and 0 <= ny < grid_size[1]:
+                neighbors.append((nx, ny))
+                
+        return neighbors
+
+    def get_percepts_for_tile(self, tile_position):
+        # NOTE: Replace with your actual game map sensor function
+        return [] 
+
+    def a_star_search(self, start, goal, grid_size):
+        start_node = Node(start)
+        goal_node = Node(goal)
+
+        open_list = []
+        closed_set = set() 
+
+        heapq.heappush(open_list, start_node)
+
+        while open_list:
+            current_node = heapq.heappop(open_list)
+            closed_set.add(current_node.position)
+
+            if current_node.position == goal_node.position:
+                path = []
+                while current_node:
+                    path.append(current_node.position)
+                    current_node = current_node.parent
+                return path[::-1] 
+
+            for neighbor_pos in self.get_neighbors(current_node, grid_size):
+                if neighbor_pos in closed_set:
+                    continue
+
+                # Logical Feasibility Validation
+                self.kb.clear_facts()
+                
+                current_percepts = self.get_percepts_for_tile(neighbor_pos)
+                for percept in current_percepts:
+                    self.kb.tell_fact(percept)
+                    
+                self.kb.forward_chain()
+                
+                # Mark Infeasible if Retreat is deduced
+                if 'Retreat' in self.kb.facts:
+                    continue 
+                    
+                # Standard A* path evaluation for feasible nodes
+                neighbor_node = Node(neighbor_pos, current_node)
+                neighbor_node.g = current_node.g + 1
+                neighbor_node.h = self.calculate_heuristic(neighbor_pos, goal)
+                neighbor_node.f = neighbor_node.g + neighbor_node.h
+
+                if any(open_node for open_node in open_list if neighbor_node.position == open_node.position and neighbor_node.g >= open_node.g):
+                    continue
+
+                heapq.heappush(open_list, neighbor_node)
+
+        return None
